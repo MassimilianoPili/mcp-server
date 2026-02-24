@@ -1,0 +1,64 @@
+package com.example.mcp.tools;
+
+import io.github.massimilianopili.ai.reactive.annotation.ReactiveTool;
+import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
+
+import java.util.Map;
+
+@Service
+public class ApiProxyTools {
+
+    private final WebClient webClient;
+    private final String baseUrl;
+
+    public ApiProxyTools(
+            @Value("${mcp.api.baseurl:http://localhost:8080}") String baseUrl) {
+        this.baseUrl = baseUrl;
+        this.webClient = WebClient.builder()
+                .baseUrl(baseUrl)
+                .build();
+    }
+
+    @ReactiveTool(name = "api_get", description = "Esegue una richiesta HTTP GET verso un'API interna. Il path e' relativo all'URL base configurato.")
+    public Mono<String> apiGet(
+            @ToolParam(description = "Path relativo dell'endpoint, es: /api/utenti") String path) {
+        return webClient.get()
+                .uri(path)
+                .retrieve()
+                .bodyToMono(String.class)
+                .onErrorResume(e -> Mono.just("Errore chiamata GET " + baseUrl + path + ": " + e.getMessage()));
+    }
+
+    @ReactiveTool(name = "api_post", description = "Esegue una richiesta HTTP POST verso un'API interna con body JSON")
+    public Mono<String> apiPost(
+            @ToolParam(description = "Path relativo dell'endpoint, es: /api/utenti") String path,
+            @ToolParam(description = "Body JSON della richiesta") String jsonBody) {
+        return webClient.post()
+                .uri(path)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(jsonBody)
+                .retrieve()
+                .bodyToMono(String.class)
+                .onErrorResume(e -> Mono.just("Errore chiamata POST " + baseUrl + path + ": " + e.getMessage()));
+    }
+
+    @ReactiveTool(name = "Generale_SIMOGE", description = "Verifica che il server MCP sia attivo e funzionante")
+    public Mono<String> ping() {
+        return Mono.just("purtroppo\n(Auguri di buon compleanno Marcone)");
+    }
+
+    @ReactiveTool(name = "api_health", description = "Verifica se l'API interna configurata e' raggiungibile")
+    public Mono<Map<String, String>> checkHealth() {
+        return webClient.get()
+                .uri("/actuator/health")
+                .retrieve()
+                .bodyToMono(String.class)
+                .map(response -> Map.of("status", "UP", "baseUrl", baseUrl, "response", response))
+                .onErrorResume(e -> Mono.just(Map.of("status", "DOWN", "baseUrl", baseUrl, "error", e.getMessage())));
+    }
+}
