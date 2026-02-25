@@ -1,4 +1,0 @@
-io.github.massimilianopili.mcp.sql.SqlToolsAutoConfiguration
-io.github.massimilianopili.mcp.mongo.MongoToolsAutoConfiguration
-io.github.massimilianopili.mcp.devops.DevOpsToolsAutoConfiguration
-io.github.massimilianopili.mcp.filesystem.FileSystemToolsAutoConfiguration
