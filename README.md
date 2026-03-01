@@ -1,6 +1,6 @@
 # MCP Server
 
-Monolithic Spring Boot MCP (Model Context Protocol) server that aggregates 11 tool libraries into a single application. Each library activates conditionally based on environment variables, so you only enable what you need.
+Monolithic Spring Boot MCP (Model Context Protocol) server that aggregates 12 tool libraries into a single application. Each library activates conditionally based on environment variables, so you only enable what you need.
 
 ## Quick Start
 
@@ -15,14 +15,14 @@ java -jar target/mcp-server-0.0.1-SNAPSHOT.jar
 claude mcp add --transport stdio --scope user mcp-server -- java -jar /path/to/mcp-server-0.0.1-SNAPSHOT.jar
 ```
 
-Requires Java 17+.
+Requires Java 21+. See [SETUP.md](SETUP.md) for detailed deployment instructions.
 
 ## Included Libraries
 
 | Library | Tools | Activation | Description |
 |---------|-------|------------|-------------|
-| [mcp-sql-tools](https://github.com/MassimilianoPili/mcp-sql-tools) | 5 | Always active | SQL database queries (multi-DB, Oracle, H2, PostgreSQL) |
-| [mcp-filesystem-tools](https://github.com/MassimilianoPili/mcp-filesystem-tools) | 3 | Always active | File system operations with path security |
+| [mcp-sql-tools](https://github.com/MassimilianoPili/mcp-sql-tools) | 5 | `MCP_SQL_ENABLED=true` (default) | SQL database queries (multi-DB, Oracle, H2, PostgreSQL) |
+| [mcp-filesystem-tools](https://github.com/MassimilianoPili/mcp-filesystem-tools) | 3 | `MCP_FILESYSTEM_ENABLED=true` (default) | File system operations with path security |
 | [mcp-mongo-tools](https://github.com/MassimilianoPili/mcp-mongo-tools) | 5 | `MCP_MONGO_ENABLED=true` | MongoDB operations (multi-instance) |
 | [mcp-devops-tools](https://github.com/MassimilianoPili/mcp-devops-tools) | 47 | `MCP_DEVOPS_PAT` | Azure DevOps (WIQL, work items, Git, pipelines) |
 | [mcp-azure-all](https://github.com/MassimilianoPili/mcp-azure-tools) | ~64 | `MCP_AZURE_CLIENT_ID` | Azure Cloud (VM, AKS, VNet, SQL, Key Vault, ...) |
@@ -31,13 +31,14 @@ Requires Java 17+.
 | [mcp-jira-tools](https://github.com/MassimilianoPili/mcp-jira-tools) | 24 | `MCP_JIRA_API_TOKEN` | Jira Cloud (issues, boards, sprints, JQL) |
 | [mcp-vector-tools](https://github.com/MassimilianoPili/mcp-vector-tools) | 5 | `MCP_VECTOR_ENABLED=true` | Semantic vector search (pgvector, Ollama/ONNX/OpenAI) |
 | [mcp-graph-tools](https://github.com/MassimilianoPili/mcp-graph-tools) | 5 | `MCP_GRAPH_ENABLED=true` | Graph database operations (Neo4j + Apache AGE, Cypher) |
+| [mcp-playwright-tools](https://github.com/MassimilianoPili/mcp-playwright-tools) | 15 | `MCP_PLAYWRIGHT_ENABLED=true` | Browser automation (navigate, click, screenshot, snapshot, evaluate JS) |
 | Built-in (ApiProxy) | 3 | Always active | Generic REST API proxy (GET, POST, health) |
 
-**Total: ~251 tools** (when all libraries are enabled)
+**Total: ~266 tools** (when all libraries are enabled)
 
 ## Tool Annotations
 
-- **`@Tool`** (Spring AI) — synchronous: SQL, Filesystem, MongoDB, Vector Search, Graph
+- **`@Tool`** (Spring AI) — synchronous: SQL, Filesystem, MongoDB, Vector Search, Graph, Playwright
 - **`@ReactiveTool`** ([spring-ai-reactive-tools](https://github.com/MassimilianoPili/spring-ai-reactive-tools)) — async `Mono<T>`: DevOps, Azure, OCP, Docker, Jira, ApiProxy
 
 ## Configuration
@@ -45,12 +46,14 @@ Requires Java 17+.
 All configuration is via environment variables. Set only the ones for the libraries you want to activate:
 
 ```properties
-# SQL (always active, default H2)
+# SQL (conditional, default enabled)
+MCP_SQL_ENABLED=true
 MCP_DB_URL=jdbc:postgresql://localhost:5432/mydb
 MCP_DB_USER=postgres
 MCP_DB_PASSWORD=secret
 
-# Filesystem (always active)
+# Filesystem (conditional, default enabled)
+MCP_FILESYSTEM_ENABLED=true
 MCP_FS_BASEDIR=/data/myproject
 
 # API Proxy (always active)
@@ -93,14 +96,22 @@ MCP_GRAPH_ENABLED=true
 MCP_GRAPH_NEO4J_URI=bolt://neo4j:7687
 MCP_GRAPH_NEO4J_USER=neo4j
 MCP_GRAPH_NEO4J_PASSWORD=secret
+
+# Playwright Browser Automation (conditional)
+MCP_PLAYWRIGHT_ENABLED=true
+MCP_PLAYWRIGHT_BROWSER=chromium
+MCP_PLAYWRIGHT_HEADLESS=true
+MCP_PLAYWRIGHT_TIMEOUT=30000
+MCP_PLAYWRIGHT_VIEWPORT_WIDTH=1280
+MCP_PLAYWRIGHT_VIEWPORT_HEIGHT=720
 ```
 
 ## Requirements
 
-- Java 17+
+- Java 21+
 - Spring Boot 3.4.1
 - Spring AI 1.0.0
-- spring-ai-reactive-tools 0.2.0
+- spring-ai-reactive-tools 0.3.0
 
 ## License
 
