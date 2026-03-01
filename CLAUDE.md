@@ -1,6 +1,6 @@
 # MCP Server
 
-Server MCP monolitico Spring Boot che aggrega 10 librerie di tool: SQL, MongoDB, Azure DevOps, Azure Cloud, Filesystem, OpenShift, Docker, Jira Cloud, Vector Search e API Proxy.
+Server MCP monolitico Spring Boot che aggrega 11 librerie di tool: SQL, MongoDB, Azure DevOps, Azure Cloud, Filesystem, OpenShift, Docker, Jira Cloud, Vector Search, Graph Database e API Proxy.
 
 ## Build
 
@@ -41,10 +41,11 @@ I tool provengono dalle librerie auto-configurate (via `META-INF/spring/AutoConf
 | mcp-docker-tools | `io.github.massimilianopili.mcp.docker` | 41 tool (container, image, network, volume, system, compose) | `MCP_DOCKER_HOST` |
 | mcp-jira-tools | `io.github.massimilianopili.mcp.jira` | 24 tool (issue JQL, board, sprint, comment, user) | `MCP_JIRA_API_TOKEN` |
 | mcp-vector-tools | `io.github.massimilianopili.mcp.vector` | vector search multi-provider: Ollama/ONNX/OpenAI (PostgreSQL + pgvector) | `MCP_VECTOR_ENABLED=true` |
+| mcp-graph-tools | `io.github.massimilianopili.mcp.graph` | 5 tool (graph_query, graph_write, graph_schema, graph_stats, graph_list_backends) | `MCP_GRAPH_ENABLED=true` |
 
 ## Annotazioni Tool
 
-- **`@Tool`** (Spring AI): Sincroni — sql, filesystem, mongo
+- **`@Tool`** (Spring AI): Sincroni — sql, filesystem, mongo, vector, graph
 - **`@ReactiveTool`** (spring-ai-reactive-tools): Asincroni `Mono<T>` — devops, azure, ocp, docker, jira, ApiProxy
 - **`@ToolParam`**: Descrizione parametri per schema MCP
 
@@ -92,8 +93,14 @@ I tool provengono dalle librerie auto-configurate (via `META-INF/spring/AutoConf
 - `MCP_VECTOR_OLLAMA_BASE_URL`, `MCP_VECTOR_OLLAMA_MODEL`
 - `MCP_VECTOR_ONNX_MODEL_CACHE`, `MCP_VECTOR_OPENAI_API_KEY`
 
+### Graph Database (condizionale)
+- `MCP_GRAPH_ENABLED=true` — abilita tool graph database
+- `MCP_GRAPH_NEO4J_URI`, `MCP_GRAPH_NEO4J_USERNAME`, `MCP_GRAPH_NEO4J_PASSWORD`
+- `MCP_GRAPH_AGE_ENABLED`, `MCP_GRAPH_AGE_DB_URL`, `MCP_GRAPH_AGE_DB_USERNAME`, `MCP_GRAPH_AGE_DB_PASSWORD`
+- `MCP_GRAPH_AGE_GRAPH_NAME` — nome grafo AGE (default: knowledge_graph)
+
 ## Dipendenze
 
 - Spring Boot 3.4.1, Spring AI 1.0.0, spring-ai-reactive-tools 0.2.0
 - H2, Oracle (ojdbc11), PostgreSQL, Spring Data MongoDB, Spring WebFlux
-- Librerie MCP: sql-tools, devops-tools, filesystem-tools, mongo-tools, azure-all, ocp-tools, docker-tools, jira-tools, vector-tools
+- Librerie MCP: sql-tools, devops-tools, filesystem-tools, mongo-tools, azure-all, ocp-tools, docker-tools, jira-tools, vector-tools, graph-tools
