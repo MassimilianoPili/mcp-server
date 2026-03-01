@@ -123,11 +123,16 @@
         </dependency>
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
+            <artifactId>mcp-graph-tools</artifactId>
+            <version>0.0.1</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-jira-tools</artifactId>
             <version>0.0.1</version>
         </dependency>
 
-        <!-- PostgreSQL driver (per pgvector embeddings) -->
+        <!-- PostgreSQL driver (per pgvector embeddings + Apache AGE) -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
