@@ -131,6 +131,11 @@
             <artifactId>mcp-jira-tools</artifactId>
             <version>0.0.1</version>
         </dependency>
+        <dependency>
+            <groupId>io.github.massimilianopili</groupId>
+            <artifactId>mcp-playwright-tools</artifactId>
+            <version>0.0.1</version>
+        </dependency>
 
         <!-- PostgreSQL driver (per pgvector embeddings + Apache AGE) -->
         <dependency>

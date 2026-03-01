@@ -42,10 +42,11 @@ I tool provengono dalle librerie auto-configurate (via `META-INF/spring/AutoConf
 | mcp-jira-tools | `io.github.massimilianopili.mcp.jira` | 24 tool (issue JQL, board, sprint, comment, user) | `MCP_JIRA_API_TOKEN` |
 | mcp-vector-tools | `io.github.massimilianopili.mcp.vector` | vector search multi-provider: Ollama/ONNX/OpenAI (PostgreSQL + pgvector) | `MCP_VECTOR_ENABLED=true` |
 | mcp-graph-tools | `io.github.massimilianopili.mcp.graph` | 5 tool (graph_query, graph_write, graph_schema, graph_stats, graph_list_backends) | `MCP_GRAPH_ENABLED=true` |
+| mcp-playwright-tools | `io.github.massimilianopili.mcp.playwright` | 15 tool (navigate, click, fill, screenshot, snapshot ARIA, evaluate JS, waitFor, tabs, etc.) | `MCP_PLAYWRIGHT_ENABLED=true` |
 
 ## Annotazioni Tool
 
-- **`@Tool`** (Spring AI): Sincroni — sql, filesystem, mongo, vector, graph
+- **`@Tool`** (Spring AI): Sincroni — sql, filesystem, mongo, vector, graph, playwright
 - **`@ReactiveTool`** (spring-ai-reactive-tools): Asincroni `Mono<T>` — devops, azure, ocp, docker, jira, ApiProxy
 - **`@ToolParam`**: Descrizione parametri per schema MCP
 
@@ -99,8 +100,17 @@ I tool provengono dalle librerie auto-configurate (via `META-INF/spring/AutoConf
 - `MCP_GRAPH_AGE_ENABLED`, `MCP_GRAPH_AGE_DB_URL`, `MCP_GRAPH_AGE_DB_USERNAME`, `MCP_GRAPH_AGE_DB_PASSWORD`
 - `MCP_GRAPH_AGE_GRAPH_NAME` — nome grafo AGE (default: knowledge_graph)
 
+### Playwright Browser Automation (condizionale)
+- `MCP_PLAYWRIGHT_ENABLED=true` — abilita tool browser automation
+- `MCP_PLAYWRIGHT_BROWSER` — tipo browser: chromium (default), firefox, webkit
+- `MCP_PLAYWRIGHT_HEADLESS` — headless mode (default: true)
+- `MCP_PLAYWRIGHT_TIMEOUT` — timeout operazioni in ms (default: 30000)
+- `MCP_PLAYWRIGHT_VIEWPORT_WIDTH`, `MCP_PLAYWRIGHT_VIEWPORT_HEIGHT` — dimensioni viewport (default: 1280x720)
+- `MCP_PLAYWRIGHT_LOCALE` — locale browser (default: it-IT)
+- **Prerequisito**: browser Chromium installato (`mvn exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install --with-deps chromium"`)
+
 ## Dipendenze
 
 - Spring Boot 3.4.1, Spring AI 1.0.0, spring-ai-reactive-tools 0.2.0
 - H2, Oracle (ojdbc11), PostgreSQL, Spring Data MongoDB, Spring WebFlux
-- Librerie MCP: sql-tools, devops-tools, filesystem-tools, mongo-tools, azure-all, ocp-tools, docker-tools, jira-tools, vector-tools, graph-tools
+- Librerie MCP: sql-tools, devops-tools, filesystem-tools, mongo-tools, azure-all, ocp-tools, docker-tools, jira-tools, vector-tools, graph-tools, playwright-tools
