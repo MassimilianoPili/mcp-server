@@ -112,6 +112,16 @@
             <artifactId>mcp-playwright-tools</artifactId>
             <version>0.1.1</version>
         </dependency>
+        <dependency>
+            <groupId>io.github.massimilianopili</groupId>
+            <artifactId>mcp-bash-tool</artifactId>
+            <version>0.1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.massimilianopili</groupId>
+            <artifactId>mcp-python-tool</artifactId>
+            <version>0.1.0</version>
+        </dependency>
     </dependencies>
 
     <build>
