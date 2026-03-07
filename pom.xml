@@ -70,7 +70,7 @@
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-filesystem-tools</artifactId>
-            <version>0.1.0</version>
+            <version>0.2.0</version>
         </dependency>
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
@@ -95,22 +95,22 @@
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-vector-tools</artifactId>
-            <version>0.2.0</version>
+            <version>0.2.2</version>
         </dependency>
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-graph-tools</artifactId>
-            <version>0.1.0</version>
+            <version>0.1.2</version>
         </dependency>
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-jira-tools</artifactId>
-            <version>0.1.0</version>
+            <version>0.1.2</version>
         </dependency>
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-playwright-tools</artifactId>
-            <version>0.1.0</version>
+            <version>0.1.1</version>
         </dependency>
     </dependencies>
 

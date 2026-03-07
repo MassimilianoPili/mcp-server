@@ -1,88 +1,141 @@
-# MCP Server — Guida Setup per Claude Code
+# MCP Server — Guida Setup Completa
 
-Istruzioni per configurare e avviare `mcp-server` come MCP server STDIO per Claude Code. Questa guida e' destinata a un assistente AI che deve impostare la configurazione.
+Runbook per compilare, configurare e avviare `mcp-server` come server MCP STDIO per Claude Code. Seguire gli step in ordine.
 
-## Prerequisiti
+---
 
-1. **Java 21+** installato e raggiungibile. Trovare il path:
-   ```bash
-   which java          # oppure
-   /usr/lib/jvm/java-21-*/bin/java -version
-   ```
+## Step 1 — Verificare Java 21
 
-2. **JAR del server** gia' compilato. Verificare:
-   ```bash
-   ls -la /path/to/mcp-server-0.0.1-SNAPSHOT.jar
-   ```
-   Se non esiste, compilare:
-   ```bash
-   cd <directory-progetto-mcp-server>
-   mvn clean package -DskipTests
-   ```
+Il server richiede Java 21+. Verificare:
 
-3. **Browser Playwright** (opzionale, solo se si vuole `MCP_PLAYWRIGHT_ENABLED=true`):
-   ```bash
-   cd <directory-mcp-playwright-tools>
-   mvn exec:java -e -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install --with-deps chromium"
-   ```
+```bash
+java -version
+```
 
-## Configurazione `~/.claude.json`
+Se il default e' Java 17 o precedente, trovare Java 21:
 
-Il server si registra nella sezione `"mcpServers"` del file `~/.claude.json`. La struttura e':
+```bash
+# Cercare installazioni disponibili
+ls /opt/java*/bin/java 2>/dev/null
+ls /usr/lib/jvm/java-21-*/bin/java 2>/dev/null
+```
+
+Annotare il path assoluto (es. `/opt/java21/bin/java`). Sara' necessario nello Step 5.
+
+## Step 2 — Build delle librerie tool
+
+Le 12 librerie devono essere nel Maven locale (`~/.m2/repository`). Se gia' presenti (es. da Maven Central o build precedente), saltare questo step.
+
+**Ordine di build** (il framework reattivo deve essere compilato per primo):
+
+```bash
+# 1. Framework reattivo (dipendenza condivisa)
+cd spring-ai-reactive-tools && mvn clean install -Dgpg.skip=true && cd ..
+
+# 2. Librerie tool (ordine libero)
+for lib in mcp-sql-tools mcp-filesystem-tools mcp-mongo-tools mcp-devops-tools \
+           mcp-azure-tools mcp-ocp-tools mcp-docker-tools mcp-jira-tools \
+           mcp-vector-tools mcp-graph-tools mcp-playwright-tools; do
+  echo "=== Building $lib ==="
+  cd "$lib" && mvn clean install -Dgpg.skip=true && cd ..
+done
+```
+
+Tutti devono terminare con `BUILD SUCCESS`.
+
+## Step 3 — Build del server
+
+```bash
+cd mcp-server
+mvn clean package -DskipTests
+```
+
+Produce: `target/mcp-server-0.0.1-SNAPSHOT.jar` (~370 MB).
+
+Verificare:
+
+```bash
+ls -lh target/mcp-server-0.0.1-SNAPSHOT.jar
+```
+
+Annotare il **path assoluto** del JAR. Sara' necessario nello Step 5.
+
+## Step 4 — Installare i browser Playwright (opzionale)
+
+Solo se si vuole usare i 15 tool di browser automation. Se non serve, saltare e impostare `MCP_PLAYWRIGHT_ENABLED=false` (o non impostarlo, il default e' `false`).
+
+```bash
+cd mcp-playwright-tools
+mvn exec:java -e -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install --with-deps chromium"
+```
+
+Scarica Chromium (~100 MB) in `~/.cache/ms-playwright/`. Se `--with-deps` richiede root:
+
+```bash
+sudo mvn exec:java -e -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install-deps chromium"
+mvn exec:java -e -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install chromium"
+```
+
+**Nota**: Se si salta questo step ma si attiva Playwright, il server parte comunque — i tool Playwright tornano un errore descrittivo con il comando di installazione. Gli altri tool funzionano normalmente.
+
+## Step 5 — Configurare `~/.claude.json`
+
+Aprire `~/.claude.json` e aggiungere (o modificare) la sezione `"mcpServers"`:
 
 ```json
 {
   "mcpServers": {
     "simoge-mcp": {
       "type": "stdio",
-      "command": "<PATH_JAVA_21>",
+      "command": "<JAVA_21_PATH>",
       "args": [
         "-Xmx512m",
         "-jar",
-        "<PATH_JAR>"
+        "<JAR_PATH>"
       ],
       "env": {
-        // --- Variabili obbligatorie ---
-        // (almeno MCP_FS_BASEDIR per avere i tool filesystem)
-
-        // --- Variabili per attivare librerie opzionali ---
-        // (impostare solo quelle che servono)
       }
     }
   }
 }
 ```
 
-### Campi da compilare
+Sostituire:
+- `<JAVA_21_PATH>` con il path di Java 21 trovato allo Step 1 (es. `/opt/java21/bin/java` o `/usr/bin/java`)
+- `<JAR_PATH>` con il path assoluto del JAR dallo Step 3 (es. `/home/user/mcp-server/target/mcp-server-0.0.1-SNAPSHOT.jar`)
 
-| Campo | Valore | Esempio |
-|-------|--------|---------|
-| `command` | Path assoluto a Java 21+ | `/opt/java21/bin/java`, `/usr/bin/java` |
-| `args[2]` (path JAR) | Path assoluto al fat JAR | `/home/user/mcp/target/mcp-server-0.0.1-SNAPSHOT.jar` |
+### Compilare la sezione `env`
 
-### Variabili d'ambiente (`env`)
+Aggiungere **solo** le variabili delle librerie che servono. Ogni libreria non configurata resta disattivata (nessun tool registrato, nessun overhead).
 
-Ogni libreria si attiva impostando le relative env vars. **Non impostare** le variabili di librerie che non servono — il server le ignora.
-
-#### Filesystem (sempre attivo)
+#### Filesystem (attivo per default)
 
 ```json
 "MCP_FS_BASEDIR": "/home/user/projects"
 ```
 
-Root directory per le operazioni file. I tool filesystem non possono uscire da questa directory.
+Root directory per le operazioni file. I tool non possono uscire da questa directory. **Obbligatorio** — senza, usa un default che potrebbe non esistere.
 
 #### SQL Database (attivo per default)
+
+Per usare H2 embedded (no setup DB esterno):
+
+```json
+"MCP_SQL_ENABLED": "true"
+```
+
+Per PostgreSQL o altro DB esterno:
 
 ```json
 "MCP_SQL_ENABLED": "true",
 "MCP_DB_URL": "jdbc:postgresql://localhost:5432/mydb",
 "MCP_DB_USER": "postgres",
-"MCP_DB_PASSWORD": "secret"
+"MCP_DB_PASSWORD": "<password>"
 ```
 
-Per disabilitare: `"MCP_SQL_ENABLED": "false"`. Supporta H2 (default), PostgreSQL, Oracle.
-Multi-database: `"MCP_DB_NAMES": "db1,db2"` + `MCP_DB_db1_URL`, `MCP_DB_db1_USER`, etc.
+Per disabilitare: `"MCP_SQL_ENABLED": "false"`.
+
+Multi-database: `"MCP_DB_NAMES": "db1,db2"` poi per ogni nome: `MCP_DB_db1_URL`, `MCP_DB_db1_DRIVER`, `MCP_DB_db1_USER`, `MCP_DB_db1_PASSWORD`.
 
 #### MongoDB
 
@@ -91,9 +144,9 @@ Multi-database: `"MCP_DB_NAMES": "db1,db2"` + `MCP_DB_db1_URL`, `MCP_DB_db1_USER
 "MCP_MONGO_URI": "mongodb://user:pass@localhost:27017/mydb"
 ```
 
-Multi-istanza: `"MCP_MONGO_NAMES": "mongo1,mongo2"` + `MCP_MONGO_mongo1_URI`, etc.
+Multi-istanza: `"MCP_MONGO_NAMES": "m1,m2"` poi `MCP_MONGO_m1_URI`, etc.
 
-#### Azure DevOps
+#### Azure DevOps (47 tool)
 
 ```json
 "MCP_DEVOPS_PAT": "<personal-access-token>",
@@ -102,9 +155,9 @@ Multi-istanza: `"MCP_MONGO_NAMES": "mongo1,mongo2"` + `MCP_MONGO_mongo1_URI`, et
 "MCP_DEVOPS_TEAM": "<team>"
 ```
 
-Si attiva quando `MCP_DEVOPS_PAT` non e' vuoto. Fornisce 47 tool (WIQL, work items, Git, pipelines, wiki).
+Si attiva quando `MCP_DEVOPS_PAT` e' impostato e non vuoto.
 
-#### Azure Cloud
+#### Azure Cloud (~64 tool)
 
 ```json
 "MCP_AZURE_TENANT_ID": "<tenant-id>",
@@ -113,26 +166,26 @@ Si attiva quando `MCP_DEVOPS_PAT` non e' vuoto. Fornisce 47 tool (WIQL, work ite
 "MCP_AZURE_SUBSCRIPTION_ID": "<subscription-id>"
 ```
 
-Si attiva quando `MCP_AZURE_CLIENT_ID` non e' vuoto. Richiede un service principal. ~64 tool.
+Richiede un service principal Azure. Si attiva quando `MCP_AZURE_CLIENT_ID` e' impostato.
 
-#### OpenShift
+#### OpenShift 4 (49 tool)
 
 ```json
 "MCP_OCP_TOKEN": "sha256~...",
 "MCP_OCP_SERVER": "https://api.cluster.example.com:6443"
 ```
 
-Si attiva quando `MCP_OCP_TOKEN` non e' vuoto. 49 tool.
+Si attiva quando `MCP_OCP_TOKEN` e' impostato.
 
-#### Docker
+#### Docker (41 tool)
 
 ```json
 "MCP_DOCKER_HOST": "unix:///var/run/docker.sock"
 ```
 
-Si attiva quando `MCP_DOCKER_HOST` non e' vuoto. 41 tool. Su macOS: `unix:///var/run/docker.sock`. Su Linux remoto: `tcp://host:2376`.
+Si attiva quando `MCP_DOCKER_HOST` e' impostato. Linux: `unix:///var/run/docker.sock`. Remoto: `tcp://host:2376`.
 
-#### Jira Cloud
+#### Jira Cloud (24 tool)
 
 ```json
 "MCP_JIRA_BASE_URL": "https://myorg.atlassian.net",
@@ -140,21 +193,21 @@ Si attiva quando `MCP_DOCKER_HOST` non e' vuoto. 41 tool. Su macOS: `unix:///var
 "MCP_JIRA_API_TOKEN": "<api-token>"
 ```
 
-Si attiva quando `MCP_JIRA_API_TOKEN` non e' vuoto. 24 tool.
+Si attiva quando `MCP_JIRA_API_TOKEN` e' impostato.
 
-#### Vector Search (pgvector)
+#### Vector Search / pgvector (5 tool)
 
 ```json
 "MCP_VECTOR_ENABLED": "true",
-"MCP_VECTOR_PROVIDER": "ollama",
+"MCP_VECTOR_PROVIDER": "onnx",
 "MCP_VECTOR_DB_URL": "jdbc:postgresql://localhost:5432/embeddings",
 "MCP_VECTOR_DB_USER": "postgres",
 "MCP_VECTOR_DB_CREDENTIAL": "<password>"
 ```
 
-Provider embedding: `ollama` (default, richiede Ollama in rete), `onnx` (locale, all-MiniLM-L6-v2), `openai` (richiede API key). 5 tool.
+Provider: `ollama` (richiede server Ollama), `onnx` (locale, zero dipendenze esterne), `openai` (richiede `MCP_VECTOR_OPENAI_API_KEY`).
 
-#### Graph Database
+#### Graph Database (5 tool)
 
 ```json
 "MCP_GRAPH_ENABLED": "true",
@@ -163,97 +216,48 @@ Provider embedding: `ollama` (default, richiede Ollama in rete), `onnx` (locale,
 "MCP_GRAPH_NEO4J_PASSWORD": "<password>"
 ```
 
-Supporta anche Apache AGE su PostgreSQL: `"MCP_GRAPH_AGE_ENABLED": "true"` + `MCP_GRAPH_AGE_DB_URL`. 5 tool.
+Oppure Apache AGE (PostgreSQL): `"MCP_GRAPH_AGE_ENABLED": "true"` + `MCP_GRAPH_AGE_DB_URL`.
 
-#### Playwright Browser Automation
+#### Playwright Browser Automation (15 tool)
 
 ```json
 "MCP_PLAYWRIGHT_ENABLED": "true",
 "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD": "1"
 ```
 
-15 tool (navigate, click, fill, screenshot, snapshot, evaluate JS, etc.).
-`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` impedisce il download automatico dei browser a ogni avvio — i browser devono essere installati manualmente (vedi Prerequisiti).
+`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` e' importante: impedisce il download automatico dei browser (~100 MB) a ogni avvio del server.
 
-Opzionali (raramente necessari, hanno default ragionevoli):
-```json
-"MCP_PLAYWRIGHT_BROWSER": "chromium",
-"MCP_PLAYWRIGHT_HEADLESS": "true",
-"MCP_PLAYWRIGHT_TIMEOUT": "30000",
-"MCP_PLAYWRIGHT_VIEWPORT_WIDTH": "1280",
-"MCP_PLAYWRIGHT_VIEWPORT_HEIGHT": "720",
-"MCP_PLAYWRIGHT_LOCALE": "it-IT"
-```
+Opzionali (i default sono ragionevoli):
 
-## Esempio completo minimale
+| Variabile | Default | Note |
+|-----------|---------|------|
+| `MCP_PLAYWRIGHT_BROWSER` | `chromium` | `firefox`, `webkit` |
+| `MCP_PLAYWRIGHT_HEADLESS` | `true` | `false` per debug visivo |
+| `MCP_PLAYWRIGHT_TIMEOUT` | `30000` | Timeout operazioni (ms) |
+| `MCP_PLAYWRIGHT_VIEWPORT_WIDTH` | `1280` | |
+| `MCP_PLAYWRIGHT_VIEWPORT_HEIGHT` | `720` | |
+| `MCP_PLAYWRIGHT_LOCALE` | `it-IT` | |
 
-Config con solo filesystem + SQL (H2 default) + Playwright:
+## Step 6 — Riavviare Claude Code
 
-```json
-{
-  "mcpServers": {
-    "simoge-mcp": {
-      "type": "stdio",
-      "command": "/usr/bin/java",
-      "args": [
-        "-Xmx512m",
-        "-jar",
-        "/home/user/mcp-server/target/mcp-server-0.0.1-SNAPSHOT.jar"
-      ],
-      "env": {
-        "MCP_FS_BASEDIR": "/home/user/projects",
-        "MCP_PLAYWRIGHT_ENABLED": "true",
-        "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD": "1"
-      }
-    }
-  }
-}
-```
+Claude Code legge `~/.claude.json` solo all'avvio. Dopo aver salvato la configurazione, **riavviare Claude Code** (chiudere e riaprire).
 
-## Esempio completo esteso
+## Step 7 — Verificare
 
-Config con filesystem + SQL PostgreSQL + DevOps + MongoDB + Playwright:
-
-```json
-{
-  "mcpServers": {
-    "simoge-mcp": {
-      "type": "stdio",
-      "command": "/usr/bin/java",
-      "args": [
-        "-Xmx512m",
-        "-jar",
-        "/home/user/mcp-server/target/mcp-server-0.0.1-SNAPSHOT.jar"
-      ],
-      "env": {
-        "MCP_FS_BASEDIR": "/home/user/projects",
-        "MCP_DB_URL": "jdbc:postgresql://localhost:5432/mydb",
-        "MCP_DB_USER": "postgres",
-        "MCP_DB_PASSWORD": "secret",
-        "MCP_DEVOPS_PAT": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-        "MCP_DEVOPS_ORG": "my-org",
-        "MCP_DEVOPS_PROJECT": "my-project",
-        "MCP_DEVOPS_TEAM": "my-team",
-        "MCP_MONGO_ENABLED": "true",
-        "MCP_MONGO_URI": "mongodb://root:pass@localhost:27017",
-        "MCP_PLAYWRIGHT_ENABLED": "true",
-        "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD": "1"
-      }
-    }
-  }
-}
-```
-
-## Verifica
-
-Dopo aver salvato `~/.claude.json`, **riavviare Claude Code**. Poi verificare:
-
-1. Il server `simoge-mcp` non mostra errori (nessun badge rosso)
-2. I tool sono disponibili — provare a invocare `playwright_navigate` con un URL o `sql_query` con una query
+1. **Nessun errore**: il server `simoge-mcp` non deve mostrare badge rosso o stato "failed"
+2. **Tool disponibili**: provare a invocare un tool, ad esempio:
+   - `playwright_navigate` con URL `https://example.com`
+   - `sql_query` con una query semplice
+   - `fs_list_directory` sulla `MCP_FS_BASEDIR`
 
 ### Test manuale (senza Claude Code)
 
+Per verificare che il server funzioni prima di registrarlo:
+
 ```bash
+export MCP_FS_BASEDIR=/tmp
+export MCP_SQL_ENABLED=false
+
 {
   printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}\n'
   sleep 4
@@ -261,27 +265,31 @@ Dopo aver salvato `~/.claude.json`, **riavviare Claude Code**. Poi verificare:
   sleep 1
   printf '{"jsonrpc":"2.0","id":2,"method":"tools/list"}\n'
   sleep 2
-} | MCP_FS_BASEDIR=/tmp java -Xmx384m -jar target/mcp-server-0.0.1-SNAPSHOT.jar 2>/dev/null
+} | <JAVA_21_PATH> -Xmx384m -jar <JAR_PATH> 2>/dev/null
 ```
 
-Deve rispondere con JSON-RPC: `initialize` result + `tools/list` result.
+Deve stampare due risposte JSON-RPC:
+- id=1: `initialize` con `serverInfo.name=mcp-server`
+- id=2: `tools/list` con l'elenco tool
+
+---
 
 ## Troubleshooting
 
 | Sintomo | Causa | Soluzione |
 |---------|-------|-----------|
-| `UnsupportedClassVersionError: class file version 65.0` | Java < 21 | Usare Java 21+. Verificare `java -version` |
-| `Executable doesn't exist at ~/.cache/ms-playwright/...` | Browser non installato | `cd mcp-playwright-tools && mvn exec:java -e -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install --with-deps chromium"` |
-| Exit code 1, zero output su stdout | Errore di startup | Controllare `logs/mcp-server.log` nella directory di lavoro del JAR |
-| Server parte ma zero tool | Nessuna env var impostata | Verificare sezione `env` in `~/.claude.json` |
-| Badge rosso `simoge-mcp` in Claude Code | Crash del processo | Provare il test manuale sopra per vedere l'errore |
-| Prima chiamata Playwright lenta (~10s) | Lazy init del browser | Normale. Le chiamate successive sono veloci |
-| Playwright fallisce ma il resto funziona | Browser non installato, graceful degradation | I 15 tool Playwright tornano errore, gli altri ~250 funzionano normalmente |
+| `UnsupportedClassVersionError: class file version 65.0` | Java < 21 | Usare Java 21+. Controllare il `command` in `~/.claude.json` |
+| `Executable doesn't exist at ~/.cache/ms-playwright/...` | Chromium non installato | Eseguire Step 4 |
+| Exit code 1, zero output | Crash startup Spring Boot | Cercare `logs/mcp-server.log` nella working directory del JAR |
+| Server parte, 0 tool | Nessuna libreria attivata | Aggiungere env vars in `~/.claude.json` |
+| Badge rosso in Claude Code | Processo Java crasha all'avvio | Eseguire il test manuale per vedere l'errore |
+| Prima chiamata Playwright lenta (~10s) | Lazy init del browser al primo uso | Normale. Successive chiamate veloci |
+| Playwright fallisce, resto funziona | Chromium non installato, graceful degradation | I 15 tool Playwright tornano errore descrittivo, gli altri ~250 funzionano |
 
-## Note tecniche
+## Note
 
-- **Trasporto**: STDIO (stdin/stdout JSON-RPC 2.0). Tutto il logging va su file (`logs/mcp-server.log`), mai su stdout
-- **Memoria**: `-Xmx512m` consigliato. Con tutte le librerie attive, il footprint e' ~300-400 MB
-- **Virtual threads**: Java 21 virtual threads abilitati (`spring.threads.virtual.enabled=true`), le chiamate tool sono concorrenti
-- **Lazy init Playwright**: Il browser si avvia solo alla prima chiamata tool, non allo startup del server. Se il browser non e' installato, il server parte comunque e gli altri tool funzionano. Se il browser viene installato dopo, la prossima chiamata funziona (auto-recovery)
-- **`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`**: Importante in produzione. Senza, Playwright tenta di scaricare ~100 MB di binari browser a ogni avvio del server
+- **Memoria**: `-Xmx512m` consigliato. Footprint effettivo ~300-400 MB con tutte le librerie attive
+- **Logging**: tutto su file `logs/mcp-server.log`, mai su stdout (che e' riservato a JSON-RPC)
+- **Virtual threads**: abilitati con Java 21 (`spring.threads.virtual.enabled=true`)
+- **Lazy init Playwright**: il browser si avvia solo al primo tool call (~5-10s), non allo startup. Auto-recovery: se il browser viene installato dopo, funziona senza riavvio
+- **Graceful degradation**: una libreria in errore (es. DB non raggiungibile, browser non installato) non impatta le altre
