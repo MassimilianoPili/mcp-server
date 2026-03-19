@@ -1,7 +1,8 @@
 # MCP Server (simoge-mcp)
 
-Server MCP monolitico Spring Boot che aggrega 15 librerie tool + tool inline. ~231 tool registrati.
+Server MCP monolitico Spring Boot che aggrega 20 librerie tool + tool inline. **286 tool registrati**.
 Container: `simoge-mcp`, 1g memoria, porta 8099, transport SSE (`http://localhost:8099/sse`).
+Config: `env_file: .env` — tutte le variabili esternalizzate, docker-compose e' un template pulito.
 
 ## Build & Deploy
 
@@ -20,9 +21,13 @@ Java 17+. Maven: `/opt/maven/bin/mvn`.
 
 mcp-sql-tools, mcp-mongo-tools, mcp-devops-tools, mcp-azure-all, mcp-filesystem-tools,
 mcp-ocp-tools, mcp-docker-tools, mcp-jira-tools, mcp-vector-tools, mcp-graph-tools,
-mcp-bash-tool, mcp-python-tool, mcp-redis-tools, mcp-playwright-tools, spring-ai-reactive-tools.
+mcp-bash-tool, mcp-python-tool, mcp-redis-tools, mcp-playwright-tools, spring-ai-reactive-tools,
+mcp-recovery-tools, mcp-metacognition-tools, mcp-token-tools, mcp-ollama-tools, mcp-gitea-tools.
 
-Tool inline: Context7Tools, WebSearchTools, ClaudeMessagingTools.
+Tool inline: Context7Tools, WebSearchTools, WebIngestTools, AnkiTools, ApiProxyTools,
+ClaudeTaskQueueTools, OpenAlexTools, ResearchValidationTools.
+
+All tool descriptions standardized to English (2026-03-19).
 
 Configurazione completa, librerie e tool list: vedi [README.md](README.md).
 Ricerca semantica: `embeddings_search_docs("simoge-mcp server")`

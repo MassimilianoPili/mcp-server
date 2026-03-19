@@ -1,6 +1,5 @@
 package com.example.mcp.tools;
 
-import com.zaxxer.hikari.HikariDataSource;
 import io.github.massimilianopili.ai.reactive.annotation.ReactiveTool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,27 +26,34 @@ import java.util.Map;
 
 /**
  * Task queue tools per coordinamento inter-sessione Claude.
- * Dual-write: PostgreSQL (source of truth) + Redis (dispatch veloce).
+ * Triple-write: PostgreSQL (source of truth) + Redis (dispatch veloce) + Preference Sort (ranking).
  *
  * <p>I task persistono in {@code claude_tasks} su PostgreSQL. Redis {@code claude:taskq}
  * è un canale di notifica opzionale. {@code claude_task_list} legge sempre da PostgreSQL,
  * rendendo il sistema resiliente a restart Redis.</p>
+ *
+ * <p>Preference Sort integration: task auto-registrati all'enqueue, auto-rimossi al complete.
+ * Best-effort — se Preference Sort è down, il task resta in DB senza ranking.</p>
  */
 @Service
 @ConditionalOnProperty(name = "mcp.taskqueue.enabled", havingValue = "true", matchIfMissing = false)
 public class ClaudeTaskQueueTools {
 
     private static final Logger log = LoggerFactory.getLogger(ClaudeTaskQueueTools.class);
+    private static final String RANK_API = "http://preference-sort:8093";
+    private static final String RANK_USER = "f7294891-b031-432d-8382-8592d3e6b1aa";
 
     private final JdbcTemplate jdbc;
     private final ReactiveStringRedisTemplate msg;
+    private final HttpClient http = HttpClient.newHttpClient();
+    private final ObjectMapper mapper = new ObjectMapper();
 
     public ClaudeTaskQueueTools(
             @Qualifier("taskQueueDataSource") javax.sql.DataSource dataSource,
             @Qualifier("mcpRedisMessagingTemplate") ReactiveStringRedisTemplate msg) {
         this.jdbc = new JdbcTemplate(dataSource);
         this.msg = msg;
-        log.info("ClaudeTaskQueueTools inizializzato (DB + Redis DB 5)");
+        log.info("ClaudeTaskQueueTools inizializzato (DB + Redis DB 5 + Preference Sort)");
     }
 
     @ReactiveTool(name = "claude_task_enqueue",
@@ -71,22 +77,34 @@ public class ClaudeTaskQueueTools {
                             "VALUES (?, ?, ?::jsonb, ?, ?, ?) RETURNING task_id",
                     Long.class, ref, taskType, payloadJson, createdBy, targetLabel, prio);
 
-            // 2. LPUSH in Redis claude:taskq (best-effort)
+            // 2. LPUSH Redis (best-effort)
             String redisMsg = String.format(
                     "{\"task_id\":%d,\"ref\":\"%s\",\"priority\":%d,\"type\":\"%s\"}",
                     taskId, ref, prio, taskType);
+            boolean redisOk = false;
             try {
                 msg.opsForList().leftPush("claude:taskq", redisMsg).block();
-                // 3. UPDATE redis_key e dispatched_at
                 jdbc.update("UPDATE claude_tasks SET redis_key = 'claude:taskq', dispatched_at = now() WHERE task_id = ?",
                         taskId);
-                return String.format("Task #%d accodato (DB + Redis) — ref: %s, tipo: %s, priorità: %d",
-                        taskId, ref, taskType, prio);
+                redisOk = true;
             } catch (Exception e) {
-                log.warn("Redis dispatch fallito per task #{}, resta in PostgreSQL: {}", taskId, e.getMessage());
-                return String.format("Task #%d inserito solo in DB (Redis non disponibile) — ref: %s",
-                        taskId, ref);
+                log.warn("Redis dispatch fallito per task #{}: {}", taskId, e.getMessage());
             }
+
+            // 3. Register in Preference Sort (best-effort)
+            boolean rankOk = false;
+            try {
+                String listUuid = findOrCreateTaskQueueList();
+                addItemToRanking(listUuid, taskId, ref, taskType);
+                rankOk = true;
+            } catch (Exception e) {
+                log.warn("Preference Sort registration fallita per task #{}: {}", taskId, e.getMessage());
+            }
+
+            String sinks = (redisOk ? "Redis" : "") + (redisOk && rankOk ? " + " : "") + (rankOk ? "Ranker" : "");
+            if (sinks.isEmpty()) sinks = "solo DB";
+            return String.format("Task #%d accodato (DB + %s) — ref: %s, tipo: %s, priorità: %d",
+                    taskId, sinks, ref, taskType, prio);
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
@@ -137,6 +155,14 @@ public class ClaudeTaskQueueTools {
             if (updated == 0) {
                 return "ERRORE: Task #" + taskId + " non trovato o non in stato CLAIMED";
             }
+
+            // Remove from Preference Sort (best-effort)
+            try {
+                removeItemFromRanking(taskId);
+            } catch (Exception e) {
+                log.warn("Preference Sort removal fallita per task #{}: {}", taskId, e.getMessage());
+            }
+
             return String.format("Task #%d → %s (%s)", taskId, dbStatus, status);
         }).subscribeOn(Schedulers.boundedElastic());
     }
@@ -213,42 +239,84 @@ public class ClaudeTaskQueueTools {
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
+    // ── Preference Sort helpers (best-effort) ──────────────────────────
+
+    private String findOrCreateTaskQueueList() throws Exception {
+        HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(RANK_API + "/lists?limit=100"))
+                .header("X-Auth-User-Id", RANK_USER)
+                .GET().build();
+        JsonNode lists = mapper.readTree(http.send(req, HttpResponse.BodyHandlers.ofString()).body());
+
+        for (JsonNode list : lists) {
+            if ("task-queue".equals(list.path("category").asText())) {
+                return list.path("id").asText();
+            }
+        }
+
+        // Create list if not found
+        String body = "{\"name\":\"Task Queue\",\"category\":\"task-queue\",\"ig_threshold\":0.01}";
+        HttpRequest create = HttpRequest.newBuilder()
+                .uri(URI.create(RANK_API + "/lists"))
+                .header("X-Auth-User-Id", RANK_USER)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body)).build();
+        JsonNode created = mapper.readTree(http.send(create, HttpResponse.BodyHandlers.ofString()).body());
+        String uuid = created.path("id").asText();
+        log.info("Preference Sort: creata lista task-queue {}", uuid);
+        return uuid;
+    }
+
+    private void addItemToRanking(String listUuid, long taskId, String ref, String taskType) throws Exception {
+        String itemName = String.format("#%d %s [%s]", taskId, ref, taskType);
+        String body = String.format("{\"items\":[{\"name\":\"%s\"}]}", itemName);
+        HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(RANK_API + "/lists/" + listUuid + "/items"))
+                .header("X-Auth-User-Id", RANK_USER)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body)).build();
+        JsonNode resp = mapper.readTree(http.send(req, HttpResponse.BodyHandlers.ofString()).body());
+        String itemUuid = resp.path(0).path("id").asText(null);
+        if (itemUuid != null && !itemUuid.isEmpty()) {
+            jdbc.update("UPDATE claude_tasks SET rank_item_uuid = ?::uuid WHERE task_id = ?", itemUuid, taskId);
+            log.info("Preference Sort: task #{} registrato come item {}", taskId, itemUuid);
+        }
+    }
+
+    private void removeItemFromRanking(long taskId) throws Exception {
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT rank_item_uuid::text FROM claude_tasks WHERE task_id = ? AND rank_item_uuid IS NOT NULL", taskId);
+        if (rows.isEmpty()) return;
+
+        String itemUuid = rows.getFirst().get("rank_item_uuid").toString();
+        String listUuid = findOrCreateTaskQueueList();
+        HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(RANK_API + "/lists/" + listUuid + "/items/" + itemUuid))
+                .header("X-Auth-User-Id", RANK_USER)
+                .DELETE().build();
+        http.send(req, HttpResponse.BodyHandlers.ofString());
+        jdbc.update("UPDATE claude_tasks SET rank_item_uuid = NULL WHERE task_id = ?", taskId);
+        log.info("Preference Sort: task #{} rimosso (item {})", taskId, itemUuid);
+    }
+
     private Mono<List<String>> claudeTaskListRanked() {
         return Mono.fromCallable(() -> {
             List<String> result = new ArrayList<>();
 
             // 1. Find task-queue list in Preference Sort
-            String rankApi = "http://preference-sort:8093";
-            String userId = "f7294891-b031-432d-8382-8592d3e6b1aa";
-            ObjectMapper mapper = new ObjectMapper();
-            HttpClient http = HttpClient.newHttpClient();
-
-            HttpRequest listsReq = HttpRequest.newBuilder()
-                    .uri(URI.create(rankApi + "/lists?limit=100"))
-                    .header("X-Auth-User-Id", userId)
-                    .GET().build();
-
-            HttpResponse<String> listsResp = http.send(listsReq, HttpResponse.BodyHandlers.ofString());
-            JsonNode lists = mapper.readTree(listsResp.body());
-
-            String listUuid = null;
-            for (JsonNode list : lists) {
-                if ("task-queue".equals(list.path("category").asText())) {
-                    listUuid = list.path("id").asText();
-                    break;
-                }
-            }
-
-            if (listUuid == null) {
-                result.add("=== Nessuna lista task-queue in Preference Sort ===");
-                result.add("Esegui 'claude-coord rank-sync' per sincronizzare i task.");
+            String listUuid;
+            try {
+                listUuid = findOrCreateTaskQueueList();
+            } catch (Exception e) {
+                result.add("=== Preference Sort non raggiungibile ===");
+                result.add(e.getMessage());
                 return result;
             }
 
             // 2. Get ranking
             HttpRequest rankReq = HttpRequest.newBuilder()
-                    .uri(URI.create(rankApi + "/lists/" + listUuid + "/ranking"))
-                    .header("X-Auth-User-Id", userId)
+                    .uri(URI.create(RANK_API + "/lists/" + listUuid + "/ranking"))
+                    .header("X-Auth-User-Id", RANK_USER)
                     .GET().build();
 
             HttpResponse<String> rankResp = http.send(rankReq, HttpResponse.BodyHandlers.ofString());
