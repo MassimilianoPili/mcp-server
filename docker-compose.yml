@@ -1,0 +1,19 @@
+services:
+  simoge-mcp:
+    image: simoge-mcp:latest
+    build: .
+    container_name: simoge-mcp
+    networks: [shared]
+    ports:
+      - "127.0.0.1:8099:8099"
+    env_file: .env
+    volumes:
+      - /data/massimiliano:/data/massimiliano:rw
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    mem_limit: 1g
+    memswap_limit: 1g
+    restart: unless-stopped
+
+networks:
+  shared:
+    external: true
