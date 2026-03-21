@@ -3,13 +3,13 @@ FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /build
 
 COPY pom.xml .
-RUN mvn dependency:resolve -q
+RUN --mount=type=cache,target=/root/.m2,id=mcp-server-m2 mvn dependency:resolve -q
 
 COPY src/ src/
-RUN mvn package -DskipTests -q
+RUN --mount=type=cache,target=/root/.m2,id=mcp-server-m2 mvn package -DskipTests -q
 
 # Installa Chromium via Playwright CLI (dipendenza transitiva da mcp-playwright-tools)
-RUN mvn exec:java -q \
+RUN --mount=type=cache,target=/root/.m2,id=mcp-server-m2 mvn exec:java -q \
     -Dexec.mainClass=com.microsoft.playwright.CLI \
     -Dexec.args="install --with-deps chromium"
 
@@ -23,6 +23,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /root/.cache/ms-playwright /root/.cache/ms-playwright
+ENV PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 WORKDIR /app
 COPY --from=build /build/target/mcp-server-0.0.1-SNAPSHOT.jar app.jar
 

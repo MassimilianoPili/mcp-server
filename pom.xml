@@ -112,6 +112,43 @@
         </dependency>
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
+            <artifactId>mcp-pdf-tools</artifactId>
+            <version>0.1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.massimilianopili</groupId>
+            <artifactId>mcp-keycloak-tools</artifactId>
+            <version>0.1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.massimilianopili</groupId>
+            <artifactId>mcp-csv-tools</artifactId>
+            <version>0.1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.massimilianopili</groupId>
+            <artifactId>mcp-http-tools</artifactId>
+            <version>0.1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.massimilianopili</groupId>
+            <artifactId>mcp-json-tools</artifactId>
+            <version>0.1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.massimilianopili</groupId>
+            <artifactId>mcp-markdown-tools</artifactId>
+            <version>0.1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.massimilianopili</groupId>
+            <artifactId>mcp-ssh-tools</artifactId>
+            <version>0.1.0</version>
+        </dependency>
+        <!-- mcp-code-tools:0.1.0 — rimossa: tree-sitter JNI non carica nel container Docker.
+             Da testare separatamente prima di reintegrare. -->
+        <dependency>
+            <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-gitea-tools</artifactId>
             <version>0.1.1</version>
         </dependency>
