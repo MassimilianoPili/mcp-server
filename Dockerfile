@@ -2,16 +2,21 @@
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /build
 
+ARG GITEA_TOKEN
+
+# Maven settings: Gitea registry (LAN) come primo repo, Central fallback
+COPY settings-docker.xml /root/.m2/settings.xml
+
+# Playwright install (cachato — cambia solo se pom.xml cambia)
 COPY pom.xml .
-RUN --mount=type=cache,target=/root/.m2,id=mcp-server-m2 mvn dependency:resolve -q
-
-COPY src/ src/
-RUN --mount=type=cache,target=/root/.m2,id=mcp-server-m2 mvn package -DskipTests -q
-
-# Installa Chromium via Playwright CLI (dipendenza transitiva da mcp-playwright-tools)
-RUN --mount=type=cache,target=/root/.m2,id=mcp-server-m2 mvn exec:java -q \
+RUN --mount=type=cache,target=/root/.m2/repository,id=mcp-server-m2 mvn dependency:resolve -q
+RUN --mount=type=cache,target=/root/.m2/repository,id=mcp-server-m2 mvn exec:java -q \
     -Dexec.mainClass=com.microsoft.playwright.CLI \
     -Dexec.args="install --with-deps chromium"
+
+# App build (invalidato quando src/ cambia, layer Playwright sopra è cachato)
+COPY src/ src/
+RUN --mount=type=cache,target=/root/.m2/repository,id=mcp-server-m2 mvn package -DskipTests -q
 
 # === Stage 2: runtime JRE ===
 FROM eclipse-temurin:21-jre-jammy

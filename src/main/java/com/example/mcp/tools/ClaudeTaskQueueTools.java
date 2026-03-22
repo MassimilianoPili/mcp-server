@@ -20,9 +20,11 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Task queue tools per coordinamento inter-sessione Claude.
@@ -59,6 +61,7 @@ public class ClaudeTaskQueueTools {
     @ReactiveTool(name = "claude_task_enqueue",
             description = "Enqueues a task for a future agent. Dual-write: PostgreSQL (durability) + Redis (dispatch). " +
                     "If targetLabel is null, any future session can dequeue it. " +
+                    "Supports dependencies: use dependsOn to specify task IDs that must complete first. " +
                     "The user explicitly asks to check the queue to see and choose tasks.")
     public Mono<String> claudeTaskEnqueue(
             @ToolParam(description = "Correlation slug (e.g. 'research-gp', 'deploy-check')") String ref,
@@ -66,9 +69,11 @@ public class ClaudeTaskQueueTools {
             @ToolParam(description = "JSON task payload with fields: task, context, constraints") String payloadJson,
             @ToolParam(description = "Creating session label (e.g. 'chat-31')") String createdBy,
             @ToolParam(description = "Specific target label (null = anyone)", required = false) String targetLabel,
-            @ToolParam(description = "Priority 1-10 (1=urgent, 5=default, 10=low)", required = false) Integer priority) {
+            @ToolParam(description = "Priority 1-10 (1=urgent, 5=default, 10=low)", required = false) Integer priority,
+            @ToolParam(description = "Comma-separated task IDs this task depends on (e.g. '3,5,12')", required = false) String dependsOn) {
 
         int prio = (priority != null) ? Math.max(1, Math.min(10, priority)) : 5;
+        List<Long> depIds = parseDependsOn(dependsOn);
 
         return Mono.fromCallable(() -> {
             // 1. INSERT in PostgreSQL → ottieni task_id
@@ -77,10 +82,21 @@ public class ClaudeTaskQueueTools {
                             "VALUES (?, ?, ?::jsonb, ?, ?, ?) RETURNING task_id",
                     Long.class, ref, taskType, payloadJson, createdBy, targetLabel, prio);
 
-            // 2. LPUSH Redis (best-effort)
+            // 2. INSERT dependencies (FK-enforced)
+            List<String> depWarnings = new ArrayList<>();
+            for (Long depId : depIds) {
+                try {
+                    jdbc.update("INSERT INTO claude_task_deps (task_id, depends_on_id) VALUES (?, ?)", taskId, depId);
+                } catch (Exception e) {
+                    depWarnings.add("#" + depId + " (" + e.getMessage().split("\n")[0] + ")");
+                    log.warn("Dependency insert fallito per task #{} -> #{}: {}", taskId, depId, e.getMessage());
+                }
+            }
+
+            // 3. LPUSH Redis (best-effort)
             String redisMsg = String.format(
-                    "{\"task_id\":%d,\"ref\":\"%s\",\"priority\":%d,\"type\":\"%s\"}",
-                    taskId, ref, prio, taskType);
+                    "{\"task_id\":%d,\"ref\":\"%s\",\"priority\":%d,\"type\":\"%s\",\"deps\":%d}",
+                    taskId, ref, prio, taskType, depIds.size());
             boolean redisOk = false;
             try {
                 msg.opsForList().leftPush("claude:taskq", redisMsg).block();
@@ -91,7 +107,7 @@ public class ClaudeTaskQueueTools {
                 log.warn("Redis dispatch fallito per task #{}: {}", taskId, e.getMessage());
             }
 
-            // 3. Register in Preference Sort (best-effort)
+            // 4. Register in Preference Sort (best-effort)
             boolean rankOk = false;
             try {
                 String listUuid = findOrCreateTaskQueueList();
@@ -103,19 +119,38 @@ public class ClaudeTaskQueueTools {
 
             String sinks = (redisOk ? "Redis" : "") + (redisOk && rankOk ? " + " : "") + (rankOk ? "Ranker" : "");
             if (sinks.isEmpty()) sinks = "solo DB";
-            return String.format("Task #%d accodato (DB + %s) — ref: %s, tipo: %s, priorità: %d",
-                    taskId, sinks, ref, taskType, prio);
+            String depStr = depIds.isEmpty() ? "" :
+                    String.format(", dipende da: %s", depIds.stream().map(id -> "#" + id).collect(Collectors.joining(",")));
+            String warnStr = depWarnings.isEmpty() ? "" :
+                    String.format("\nWARN dipendenze non trovate: %s", String.join(", ", depWarnings));
+            return String.format("Task #%d accodato (DB + %s) — ref: %s, tipo: %s, priorità: %d%s%s",
+                    taskId, sinks, ref, taskType, prio, depStr, warnStr);
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
     @ReactiveTool(name = "claude_task_claim",
             description = "Claims a specific task (chosen by the user after viewing the list). " +
-                    "Updates PostgreSQL: status=CLAIMED, claimed_by, claimed_at. Returns the task payload.")
+                    "Updates PostgreSQL: status=CLAIMED, claimed_by, claimed_at. Returns the task payload. " +
+                    "Blocks if the task has unmet dependencies (deps not yet COMPLETED).")
     public Mono<String> claudeTaskClaim(
             @ToolParam(description = "ID of the task to claim") Long taskId,
             @ToolParam(description = "Session label (e.g. 'chat-42')") String claimedBy) {
 
         return Mono.fromCallable(() -> {
+            // Check unmet dependencies
+            List<Map<String, Object>> unmetDeps = jdbc.queryForList(
+                    "SELECT d.depends_on_id, t.status " +
+                            "FROM claude_task_deps d JOIN claude_tasks t ON t.task_id = d.depends_on_id " +
+                            "WHERE d.task_id = ? AND t.status <> 'COMPLETED'",
+                    taskId);
+
+            if (!unmetDeps.isEmpty()) {
+                String depList = unmetDeps.stream()
+                        .map(d -> "#" + d.get("depends_on_id") + " (" + d.get("status") + ")")
+                        .collect(Collectors.joining(", "));
+                return "BLOCCATO: Task #" + taskId + " ha dipendenze non completate: " + depList;
+            }
+
             List<Map<String, Object>> rows = jdbc.queryForList(
                     "UPDATE claude_tasks SET status = 'CLAIMED', claimed_by = ?, claimed_at = now() " +
                             "WHERE task_id = ? AND status = 'PENDING' " +
@@ -212,23 +247,47 @@ public class ClaudeTaskQueueTools {
 
         return Mono.fromCallable(() -> {
             List<Map<String, Object>> rows = jdbc.queryForList(
-                    "SELECT task_id, ref, task_type, priority, status, created_by, " +
-                            "coalesce(claimed_by, '') as claimed_by, " +
-                            "to_char(created_at, 'MM-DD HH24:MI') as created, " +
-                            "CASE WHEN redis_key IS NOT NULL THEN 'Y' ELSE 'N' END as redis, " +
-                            "left(payload_json::text, 200) as payload_preview " +
-                            "FROM claude_tasks WHERE " + where +
-                            " ORDER BY priority, created_at LIMIT 50");
+                    "SELECT t.task_id, t.ref, t.task_type, t.priority, t.status, t.created_by, " +
+                            "coalesce(t.claimed_by, '') as claimed_by, " +
+                            "to_char(t.created_at, 'MM-DD HH24:MI') as created, " +
+                            "CASE WHEN t.redis_key IS NOT NULL THEN 'Y' ELSE 'N' END as redis, " +
+                            "left(t.payload_json::text, 200) as payload_preview, " +
+                            "coalesce(array_agg(d.depends_on_id) FILTER (WHERE d.depends_on_id IS NOT NULL), '{}') as deps " +
+                            "FROM claude_tasks t " +
+                            "LEFT JOIN claude_task_deps d ON d.task_id = t.task_id " +
+                            "WHERE " + where +
+                            " GROUP BY t.task_id ORDER BY t.priority, t.created_at LIMIT 50");
+
+            // Pre-fetch statuses for dependency checking
+            Map<Long, String> taskStatuses = new HashMap<>();
+            List<Map<String, Object>> allStatuses = jdbc.queryForList(
+                    "SELECT task_id, status FROM claude_tasks");
+            for (Map<String, Object> s : allStatuses) {
+                taskStatuses.put(((Number) s.get("task_id")).longValue(), s.get("status").toString());
+            }
 
             List<String> result = new ArrayList<>();
             result.add(String.format("=== %d task %s ===", rows.size(), filter));
 
             for (Map<String, Object> r : rows) {
-                result.add(String.format("#%-4s  %-20s [%-12s]  prio:%-2s  %s  da:%-10s  preso:%-10s  redis:%s\n       %s",
+                Long[] deps = pgArrayToLongArray(r.get("deps"));
+                String depStr = deps.length == 0 ? "dep:-" :
+                        "dep:" + Arrays.stream(deps).map(id -> "#" + id).collect(Collectors.joining(","));
+
+                // Check if blocked (PENDING with unmet deps)
+                String status_val = r.get("status").toString();
+                boolean blocked = false;
+                if ("PENDING".equals(status_val) && deps.length > 0) {
+                    blocked = Arrays.stream(deps)
+                            .anyMatch(id -> !"COMPLETED".equals(taskStatuses.getOrDefault(id, "UNKNOWN")));
+                }
+                String blockedStr = blocked ? " [BLOCKED]" : "";
+
+                result.add(String.format("#%-4s  %-20s [%-12s]  prio:%-2s  %s%s  da:%-10s  preso:%-10s  %s  redis:%s\n       %s",
                         r.get("task_id"), r.get("ref"), r.get("task_type"),
-                        r.get("priority"), r.get("status"),
+                        r.get("priority"), status_val, blockedStr,
                         r.get("created_by"), r.get("claimed_by"),
-                        r.get("redis"),
+                        depStr, r.get("redis"),
                         r.get("payload_preview")));
             }
 
@@ -237,6 +296,38 @@ public class ClaudeTaskQueueTools {
             }
             return result;
         }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    // ── Dependency helpers ─────────────────────────────────────────────
+
+    private List<Long> parseDependsOn(String dependsOn) {
+        if (dependsOn == null || dependsOn.isBlank()) return List.of();
+        return Arrays.stream(dependsOn.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(Long::parseLong)
+                .toList();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Long[] pgArrayToLongArray(Object pgArray) {
+        if (pgArray == null) return new Long[0];
+        if (pgArray instanceof java.sql.Array sqlArray) {
+            try {
+                Object[] arr = (Object[]) sqlArray.getArray();
+                return Arrays.stream(arr)
+                        .map(o -> ((Number) o).longValue())
+                        .toArray(Long[]::new);
+            } catch (Exception e) {
+                return new Long[0];
+            }
+        }
+        if (pgArray instanceof List<?> list) {
+            return list.stream()
+                    .map(o -> ((Number) o).longValue())
+                    .toArray(Long[]::new);
+        }
+        return new Long[0];
     }
 
     // ── Preference Sort helpers (best-effort) ──────────────────────────

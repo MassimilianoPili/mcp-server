@@ -1,11 +1,16 @@
 services:
   simoge-mcp:
     image: simoge-mcp:latest
-    build: .
-    container_name: simoge-mcp
-    networks: [shared]
-    ports:
-      - "127.0.0.1:8099:8099"
+    build:
+      context: .
+      args:
+        GITEA_TOKEN: ${MCP_GITEA_TOKEN}
+    networks:
+      shared:
+        aliases:
+          - simoge-mcp
+    expose:
+      - "8099"
     env_file: .env
     volumes:
       - /data/massimiliano:/data/massimiliano:rw
@@ -13,6 +18,12 @@ services:
     mem_limit: 1g
     memswap_limit: 1g
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8099/actuator/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
 
 networks:
   shared:

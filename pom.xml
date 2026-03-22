@@ -20,7 +20,7 @@
 
     <properties>
         <java.version>21</java.version>
-        <spring-ai.version>1.1.1</spring-ai.version>
+        <spring-ai.version>1.1.3</spring-ai.version>
         <reactive-tools.version>0.4.0</reactive-tools.version>
     </properties>
 
@@ -33,9 +33,9 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
-            <!-- MCP SDK 0.17.0 (da BOM Spring AI 1.1.1) supporta solo protocol 2024-11-05.
-                 Il supporto per 2025-11-25 e' fornito da mcp-protocol-patch via BeanPostProcessor.
-                 Non overriddare a 0.18.x: incompatibile con Spring AI 1.1.1 (JacksonMcpJsonMapper rimosso). -->
+            <!-- MCP SDK versione gestita dal BOM Spring AI 1.1.3.
+                 Il supporto per protocol 2025-11-25 e' fornito da mcp-protocol-patch via BeanPostProcessor.
+                 Non overriddare la versione MCP SDK manualmente. -->
         </dependencies>
     </dependencyManagement>
 
@@ -52,6 +52,12 @@
             <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
 
+        <!-- Actuator: /actuator/health endpoint for Docker healthcheck + api_health tool -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
         <!-- Reactive Tools -->
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
@@ -64,6 +70,11 @@
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-redis-tools</artifactId>
             <version>0.1.1</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.massimilianopili</groupId>
+            <artifactId>mcp-channel-tools</artifactId>
+            <version>0.1.0</version>
         </dependency>
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
@@ -145,12 +156,15 @@
             <artifactId>mcp-ssh-tools</artifactId>
             <version>0.1.0</version>
         </dependency>
-        <!-- mcp-code-tools:0.1.0 — rimossa: tree-sitter JNI non carica nel container Docker.
-             Da testare separatamente prima di reintegrare. -->
+        <dependency>
+            <groupId>io.github.massimilianopili</groupId>
+            <artifactId>mcp-code-tools</artifactId>
+            <version>0.1.0</version>
+        </dependency>
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-gitea-tools</artifactId>
-            <version>0.1.1</version>
+            <version>0.1.2</version>
         </dependency>
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
@@ -160,7 +174,7 @@
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-graph-tools</artifactId>
-            <version>0.1.3</version>
+            <version>0.1.4</version>
         </dependency>
         <dependency>
             <groupId>io.github.massimilianopili</groupId>

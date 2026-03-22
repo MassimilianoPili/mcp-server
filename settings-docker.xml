@@ -1,0 +1,29 @@
+<settings>
+  <servers>
+    <server>
+      <id>gitea</id>
+      <username>sol_root</username>
+      <password>${env.GITEA_TOKEN}</password>
+    </server>
+  </servers>
+  <profiles>
+    <profile>
+      <id>gitea-registry</id>
+      <repositories>
+        <repository>
+          <id>gitea</id>
+          <url>http://gitea:3000/api/packages/sol_root/maven</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots><enabled>true</enabled></snapshots>
+        </repository>
+        <repository>
+          <id>central</id>
+          <url>https://repo.maven.apache.org/maven2</url>
+        </repository>
+      </repositories>
+    </profile>
+  </profiles>
+  <activeProfiles>
+    <activeProfile>gitea-registry</activeProfile>
+  </activeProfiles>
+</settings>
