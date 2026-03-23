@@ -6,13 +6,21 @@
       <password>${env.GITEA_TOKEN}</password>
     </server>
   </servers>
+  <mirrors>
+    <mirror>
+      <id>maven-default-http-blocker</id>
+      <mirrorOf>!gitea,external:http:*</mirrorOf>
+      <url>http://0.0.0.0/</url>
+      <blocked>true</blocked>
+    </mirror>
+  </mirrors>
   <profiles>
     <profile>
       <id>gitea-registry</id>
       <repositories>
         <repository>
           <id>gitea</id>
-          <url>http://gitea:3000/api/packages/sol_root/maven</url>
+          <url>http://172.20.0.27:3000/api/packages/sol_root/maven</url>
           <releases><enabled>true</enabled></releases>
           <snapshots><enabled>true</enabled></snapshots>
         </repository>

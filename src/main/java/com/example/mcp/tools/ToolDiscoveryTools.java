@@ -114,7 +114,8 @@ public class ToolDiscoveryTools {
                     + "Use this to discover tools before calling them. "
                     + "Categories: infra, docker, ocp, code, sql, web, devops, gitea, jira, ai, ollama, "
                     + "embeddings, keycloak, graph, s3, redis, ssh, csv, json, markdown, pdf, http, "
-                    + "playwright, anki, openalex, claude, meta, auth, ops, net, context7, api, discovery."
+                    + "playwright, anki, openalex, claude, meta, auth, ops, net, context7, api, discovery.",
+            readOnly = true, idempotent = true
     )
     public Mono<String> toolSearch(
             @ToolParam(description = "Search query (matches tool name and description). Empty string returns all tools in category.") String query,
@@ -159,7 +160,8 @@ public class ToolDiscoveryTools {
     @ReactiveTool(
             name = "tool_info",
             description = "Get the full JSON schema of a specific tool including all parameters, types, required fields, and description. "
-                    + "Use tool_search first to find the tool name."
+                    + "Use tool_search first to find the tool name.",
+            readOnly = true, idempotent = true
     )
     public Mono<String> toolInfo(
             @ToolParam(description = "Exact tool name (e.g. 'web_search', 'docker_list_containers')") String toolName) {

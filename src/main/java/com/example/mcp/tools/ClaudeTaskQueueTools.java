@@ -231,13 +231,18 @@ public class ClaudeTaskQueueTools {
                     "Status: PENDING (default), CLAIMED, COMPLETED, FAILED, DISPATCHED (in Redis but not completed), ALL, " +
                     "RANKED (orders by BT score from Preference Sort instead of numeric priority).")
     public Mono<List<String>> claudeTaskList(
-            @ToolParam(description = "Filter: PENDING, CLAIMED, COMPLETED, FAILED, DISPATCHED, RANKED, ALL", required = false) String status) {
+            @ToolParam(description = "Filter: PENDING, CLAIMED, COMPLETED, FAILED, DISPATCHED, RANKED, ALL", required = false) String status,
+            @ToolParam(description = "Max results per page (default 20, max 500)", required = false) Integer limit,
+            @ToolParam(description = "Number of rows to skip for pagination (default 0)", required = false) Integer offset) {
 
         String filter = (status != null) ? status.toUpperCase() : "PENDING";
 
         if ("RANKED".equals(filter)) {
             return claudeTaskListRanked();
         }
+
+        int maxRows = (limit != null && limit > 0) ? Math.min(limit, 500) : 20;
+        int skip = (offset != null && offset >= 0) ? offset : 0;
 
         String where = switch (filter) {
             case "DISPATCHED" -> "dispatched_at IS NOT NULL AND status NOT IN ('COMPLETED','FAILED','CANCELLED')";
@@ -246,6 +251,9 @@ public class ClaudeTaskQueueTools {
         };
 
         return Mono.fromCallable(() -> {
+            int totalCount = jdbc.queryForObject(
+                    "SELECT count(*) FROM claude_tasks t WHERE " + where, Integer.class);
+
             List<Map<String, Object>> rows = jdbc.queryForList(
                     "SELECT t.task_id, t.ref, t.task_type, t.priority, t.status, t.created_by, " +
                             "coalesce(t.claimed_by, '') as claimed_by, " +
@@ -256,7 +264,8 @@ public class ClaudeTaskQueueTools {
                             "FROM claude_tasks t " +
                             "LEFT JOIN claude_task_deps d ON d.task_id = t.task_id " +
                             "WHERE " + where +
-                            " GROUP BY t.task_id ORDER BY t.priority, t.created_at LIMIT 50");
+                            " GROUP BY t.task_id ORDER BY t.priority, t.created_at" +
+                            " LIMIT " + maxRows + " OFFSET " + skip);
 
             // Pre-fetch statuses for dependency checking
             Map<Long, String> taskStatuses = new HashMap<>();
@@ -267,7 +276,15 @@ public class ClaudeTaskQueueTools {
             }
 
             List<String> result = new ArrayList<>();
-            result.add(String.format("=== %d task %s ===", rows.size(), filter));
+            String header;
+            if (skip > 0 || rows.size() < totalCount) {
+                int from = skip + 1;
+                int to = skip + rows.size();
+                header = String.format("=== %s [%d-%d di %d] ===", filter, from, to, totalCount);
+            } else {
+                header = String.format("=== %d task %s ===", totalCount, filter);
+            }
+            result.add(header);
 
             for (Map<String, Object> r : rows) {
                 Long[] deps = pgArrayToLongArray(r.get("deps"));
