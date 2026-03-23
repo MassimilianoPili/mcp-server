@@ -8,6 +8,7 @@ import io.github.massimilianopili.ai.reactive.annotation.ReactiveTool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
@@ -45,6 +46,12 @@ public class ResearchValidationTools {
     private static final String OPENALEX_SEARCH_URL =
             "https://api.openalex.org/works?search=%s&per_page=3";
 
+    @Autowired(required = false)
+    private FetchCacheService fetchCache;
+
+    @Autowired(required = false)
+    private IngestQueueRepository ingestQueue;
+
     private final WebClient httpClient = WebClient.builder()
             .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(512 * 1024))
             .defaultHeader("User-Agent", "academic-researcher-agent/2.0 (research validation)")
@@ -66,8 +73,22 @@ public class ResearchValidationTools {
             @ToolParam(description = "Claimed first author last name (e.g. 'Zhou')", required = false)
             String claimedFirstAuthor
     ) {
+        String normalizedTitle = title.toLowerCase().replaceAll("[^a-z0-9 ]", "").trim();
         String encodedTitle = URLEncoder.encode(title, StandardCharsets.UTF_8);
         String fetchDate = LocalDate.now().toString();
+
+        // Cache check (24h TTL)
+        if (fetchCache != null) {
+            try {
+                String cached = fetchCache.getValidationCached(normalizedTitle).block();
+                if (cached != null) {
+                    log.info("research_validate_paper cache hit for '{}'", title);
+                    return Mono.just(cached);
+                }
+            } catch (Exception e) {
+                log.debug("Validation cache lookup failed for '{}': {}", title, e.getMessage());
+            }
+        }
 
         return fetchSemanticScholar(encodedTitle, title)
                 .flatMap(s2Result -> fetchDblp(encodedTitle)
@@ -86,6 +107,20 @@ public class ResearchValidationTools {
                             return Mono.just(result);
                         })
                 )
+                .doOnNext(result -> {
+                    boolean isSuccess = result.contains("\"status\" : \"VALIDATED\"") || result.contains("\"status\":\"VALIDATED\"");
+                    // Cache validation result (fire-and-forget) — only successful validations
+                    if (fetchCache != null && isSuccess) {
+                        fetchCache.putValidationCache(normalizedTitle, result).subscribe();
+                    }
+                    // Queue for KORE ingest (fire-and-forget) — only successful validations
+                    if (ingestQueue != null && isSuccess) {
+                        String extractJson = validationToExtract(result, title);
+                        if (extractJson != null) {
+                            ingestQueue.enqueue("research_validate:" + normalizedTitle, extractJson, "validation");
+                        }
+                    }
+                })
                 .onErrorResume(e -> {
                     log.warn("research_validate_paper failed for '{}': {}", title, e.getMessage());
                     return Mono.just(buildErrorResult(title, e.getMessage(), fetchDate));
@@ -453,6 +488,47 @@ public class ResearchValidationTools {
             else break;
         }
         return jaro + prefix * 0.1 * (1 - jaro);
+    }
+
+    // ─── Validation → Extract conversion (for KORE ingest) ─────────────────────
+
+    private String validationToExtract(String validationJson, String queryTitle) {
+        try {
+            JsonNode root = MAPPER.readTree(validationJson);
+            ObjectNode extract = MAPPER.createObjectNode();
+            extract.put("extracted_from", "semantic_scholar");
+
+            JsonNode paper = root.path("paper");
+            extract.put("title", paper.path("title").asText(queryTitle));
+
+            ArrayNode authors = MAPPER.createArrayNode();
+            JsonNode paperAuthors = paper.path("authors");
+            if (paperAuthors.isArray()) {
+                for (JsonNode a : paperAuthors) {
+                    authors.add(a.asText());
+                }
+            }
+            extract.set("authors", authors);
+
+            JsonNode validation = root.path("validation");
+            int year = validation.path("year").path("verified").asInt(0);
+            if (year > 0) extract.put("year", year);
+
+            String venue = validation.path("venue").path("verified_dblp").asText(
+                    validation.path("venue").path("verified_s2").asText(""));
+            if (!venue.isEmpty()) extract.put("venue", venue);
+
+            int citations = validation.path("citations").path("verified").asInt(0);
+            if (citations > 0) extract.put("citationCount", citations);
+
+            String paperId = paper.path("s2_paper_id").asText("");
+            if (!paperId.isEmpty()) extract.put("paperId", paperId);
+
+            return extract.toString();
+        } catch (Exception e) {
+            log.debug("Failed to convert validation to extract for '{}': {}", queryTitle, e.getMessage());
+            return null;
+        }
     }
 
     // ─── Error result ───────────────────────────────────────────────────────────

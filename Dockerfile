@@ -21,6 +21,9 @@ RUN --mount=type=cache,target=/root/.m2/repository,id=mcp-server-m2 mvn package 
 # === Stage 2: runtime JRE ===
 FROM eclipse-temurin:21-jre-jammy
 
+ARG BUILD_VERSION=dev
+ENV BUILD_VERSION=${BUILD_VERSION}
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 libnss3 libnspr4 libdbus-1-3 libatk1.0-0 \
     libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 \

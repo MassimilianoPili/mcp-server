@@ -6,6 +6,7 @@ services:
       network: host
       args:
         GITEA_TOKEN: ${MCP_GITEA_TOKEN}
+        BUILD_VERSION: ${BUILD_VERSION:-dev}
     networks:
       shared:
         aliases:

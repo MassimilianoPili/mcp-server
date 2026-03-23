@@ -53,6 +53,15 @@ public class WebSearchTools {
     @Autowired(required = false)
     private PlaywrightProvider playwrightProvider;
 
+    @Autowired(required = false)
+    private FetchCacheService fetchCache;
+
+    @Autowired(required = false)
+    private IngestQueueRepository ingestQueue;
+
+    @Autowired(required = false)
+    private KoreLookupService koreLookup;
+
     public WebSearchTools(
             @Value("${mcp.websearch.url:http://searxng:8080}") String searxngUrl) {
         this.searxngClient = WebClient.builder()
@@ -79,6 +88,20 @@ public class WebSearchTools {
         String cats = (categories != null && !categories.isBlank()) ? categories : "general";
         String lang = (language != null && !language.isBlank()) ? language : "auto";
 
+        // KORE semantic prepend (pgvector lookup)
+        String korePrefix = "";
+        if (koreLookup != null && koreLookup.isAvailable()) {
+            try {
+                String koreResults = koreLookup.searchSemantic(query, 3);
+                if (koreResults != null) {
+                    korePrefix = "--- From KORE (cached knowledge) ---\n" + koreResults + "\n--- Web results ---\n";
+                }
+            } catch (Exception e) {
+                log.debug("KORE lookup skipped for '{}': {}", query, e.getMessage());
+            }
+        }
+        final String prefix = korePrefix;
+
         return searxngClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/search")
@@ -90,7 +113,10 @@ public class WebSearchTools {
                 .retrieve()
                 .bodyToMono(String.class)
                 .timeout(FETCH_TIMEOUT)
-                .onErrorResume(e -> Mono.just("Errore nella ricerca web per '" + query + "': " + e.getMessage()));
+                .map(result -> prefix.isEmpty() ? result : prefix + result)
+                .onErrorResume(e -> Mono.just(
+                        (prefix.isEmpty() ? "" : prefix) +
+                        "Errore nella ricerca web per '" + query + "': " + e.getMessage()));
     }
 
     @ReactiveTool(
@@ -111,6 +137,19 @@ public class WebSearchTools {
             @ToolParam(description = "Full URL to download, e.g.: 'https://example.com/page'") String url,
             @ToolParam(description = "Smart extraction: 'semantic_scholar', 'arxiv', 'openalex', or null/empty for raw",
                        required = false) String extract) {
+
+        // Redis cache lookup for extracted content (skip for raw fetches)
+        if (extract != null && !extract.isBlank() && fetchCache != null) {
+            try {
+                String cached = fetchCache.getCached(url).block();
+                if (cached != null) {
+                    log.info("web_fetch cache hit for '{}'", url);
+                    return Mono.just(cached);
+                }
+            } catch (Exception e) {
+                log.debug("Cache lookup failed for '{}': {}", url, e.getMessage());
+            }
+        }
 
         return httpClient.get()
                 .uri(url)
@@ -235,6 +274,13 @@ public class WebSearchTools {
                 default -> null;
             };
             if (extracted != null) {
+                // Fire-and-forget: Redis cache + PG ingest queue
+                if (fetchCache != null) {
+                    fetchCache.putCache(url, extracted).subscribe();
+                }
+                if (ingestQueue != null) {
+                    ingestQueue.enqueue(url, extracted, extract.toLowerCase().trim());
+                }
                 return Mono.just(extracted);
             }
             // Extraction failed, fall through to chunking
