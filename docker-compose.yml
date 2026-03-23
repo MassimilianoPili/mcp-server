@@ -3,6 +3,7 @@ services:
     image: simoge-mcp:latest
     build:
       context: .
+      network: host
       args:
         GITEA_TOKEN: ${MCP_GITEA_TOKEN}
     networks:
