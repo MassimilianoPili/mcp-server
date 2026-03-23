@@ -7,12 +7,16 @@ ARG GITEA_TOKEN
 # Maven settings: Gitea registry (LAN) come primo repo, Central fallback
 COPY settings-docker.xml /root/.m2/settings.xml
 
-# Playwright install (cachato — cambia solo se pom.xml cambia)
+# Dependencies + Playwright browser (cache mount avoids re-download on pom.xml changes)
 COPY pom.xml .
 RUN --mount=type=cache,target=/root/.m2/repository,id=mcp-server-m2 mvn dependency:resolve -q
-RUN --mount=type=cache,target=/root/.m2/repository,id=mcp-server-m2 mvn exec:java -q \
+RUN --mount=type=cache,target=/tmp/pw-cache,id=mcp-playwright \
+    --mount=type=cache,target=/root/.m2/repository,id=mcp-server-m2 \
+    cp -rn /tmp/pw-cache/. /root/.cache/ms-playwright/ 2>/dev/null || true \
+    && mvn exec:java -q \
     -Dexec.mainClass=com.microsoft.playwright.CLI \
-    -Dexec.args="install --with-deps chromium"
+    -Dexec.args="install --with-deps chromium" \
+    && cp -ru /root/.cache/ms-playwright/. /tmp/pw-cache/
 
 # App build (invalidato quando src/ cambia, layer Playwright sopra è cachato)
 COPY src/ src/
