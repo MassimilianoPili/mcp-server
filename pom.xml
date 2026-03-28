@@ -21,7 +21,7 @@
     <properties>
         <java.version>21</java.version>
         <spring-ai.version>1.1.3</spring-ai.version>
-        <reactive-tools.version>0.5.0</reactive-tools.version>
+        <reactive-tools.version>0.6.0</reactive-tools.version>
     </properties>
 
     <dependencyManagement>
@@ -74,7 +74,7 @@
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-channel-tools</artifactId>
-            <version>0.1.3</version>
+            <version>0.1.4</version>
         </dependency>
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
@@ -169,7 +169,7 @@
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-vector-tools</artifactId>
-            <version>0.3.1</version>
+            <version>0.4.0</version>
         </dependency>
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
@@ -226,6 +226,33 @@
             <groupId>redis.clients</groupId>
             <artifactId>jedis</artifactId>
             <version>5.2.0</version>
+        </dependency>
+
+        <!-- Extracted tool libraries (refactor 2026-03-28) -->
+        <dependency>
+            <groupId>io.github.massimilianopili</groupId>
+            <artifactId>mcp-anki-tools</artifactId>
+            <version>0.1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.massimilianopili</groupId>
+            <artifactId>mcp-context7-tools</artifactId>
+            <version>0.1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.massimilianopili</groupId>
+            <artifactId>mcp-research-tools</artifactId>
+            <version>0.1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.massimilianopili</groupId>
+            <artifactId>mcp-search-tools</artifactId>
+            <version>0.1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.massimilianopili</groupId>
+            <artifactId>mcp-claude-queue-tools</artifactId>
+            <version>0.1.0</version>
         </dependency>
     </dependencies>
 

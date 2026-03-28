@@ -1,6 +1,6 @@
 package com.example.mcp;
 
-import com.example.mcp.tools.IngestQueueRepository;
+import io.github.massimilianopili.mcp.queue.IngestQueueRepository;
 import com.example.mcp.tools.WebIngestService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
