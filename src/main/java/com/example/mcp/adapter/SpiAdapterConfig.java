@@ -58,6 +58,9 @@ public class SpiAdapterConfig {
         return new SemanticLookup() {
             @Override public boolean isAvailable() { return svc.isAvailable(); }
             @Override public String search(String query, int limit) { return svc.searchSemantic(query, limit); }
+            @Override public String searchWithGraphExpansion(String query, int vectorLimit, int graphDepth) {
+                return svc.searchGraphAugmented(query, vectorLimit, graphDepth);
+            }
         };
     }
 

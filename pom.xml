@@ -79,7 +79,7 @@
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-sql-tools</artifactId>
-            <version>0.1.1</version>
+            <version>0.1.2</version>
         </dependency>
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
@@ -154,7 +154,7 @@
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-ssh-tools</artifactId>
-            <version>0.1.0</version>
+            <version>0.2.1</version>
         </dependency>
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
@@ -169,7 +169,7 @@
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-vector-tools</artifactId>
-            <version>0.4.0</version>
+            <version>0.5.0</version>
         </dependency>
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
@@ -247,12 +247,12 @@
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-search-tools</artifactId>
-            <version>0.1.0</version>
+            <version>0.2.0</version>
         </dependency>
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-claude-queue-tools</artifactId>
-            <version>0.1.0</version>
+            <version>0.1.1</version>
         </dependency>
     </dependencies>
 

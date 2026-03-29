@@ -14,9 +14,12 @@ services:
     expose:
       - "8099"
     env_file: .env
+    environment:
+      SSH_AUTH_SOCK: /run/user/1000/ssh-agent.sock
     volumes:
       - /data/massimiliano:/data/massimiliano:rw
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /home/massimiliano/.ssh:/home/massimiliano/.ssh:ro
     mem_limit: 1g
     memswap_limit: 1g
     restart: unless-stopped
