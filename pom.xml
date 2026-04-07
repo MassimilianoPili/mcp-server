@@ -81,31 +81,39 @@
             <artifactId>mcp-sql-tools</artifactId>
             <version>0.1.2</version>
         </dependency>
+        <!-- DISABLED: no MCP_DEVOPS_PAT configured
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-devops-tools</artifactId>
             <version>0.1.1</version>
         </dependency>
+        -->
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-filesystem-tools</artifactId>
             <version>0.2.2</version>
         </dependency>
+        <!-- DISABLED: no MCP_MONGO_ENABLED=true
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-mongo-tools</artifactId>
             <version>0.1.1</version>
         </dependency>
+        -->
+        <!-- DISABLED: no mcp.azure.client-id configured
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-azure-all</artifactId>
             <version>1.1.0</version>
         </dependency>
+        -->
+        <!-- DISABLED: no mcp.ocp.token configured
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-ocp-tools</artifactId>
             <version>0.1.1</version>
         </dependency>
+        -->
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-docker-tools</artifactId>
@@ -176,26 +184,32 @@
             <artifactId>mcp-graph-tools</artifactId>
             <version>0.1.4</version>
         </dependency>
+        <!-- DISABLED: no mcp.jira.api-token configured
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-jira-tools</artifactId>
             <version>0.1.3</version>
         </dependency>
+        -->
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-playwright-tools</artifactId>
             <version>0.1.3</version>
         </dependency>
+        <!-- DISABLED: no MCP_BASH_ENABLED=true
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-bash-tool</artifactId>
             <version>0.1.0</version>
         </dependency>
+        -->
+        <!-- DISABLED: no MCP_PYTHON_ENABLED=true
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-python-tool</artifactId>
             <version>0.1.0</version>
         </dependency>
+        -->
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-protocol-patch</artifactId>
@@ -252,7 +266,7 @@
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
             <artifactId>mcp-claude-queue-tools</artifactId>
-            <version>0.1.3</version>
+            <version>0.2.1</version>
         </dependency>
     </dependencies>
 

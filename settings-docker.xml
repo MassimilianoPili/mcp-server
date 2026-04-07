@@ -20,7 +20,7 @@
       <repositories>
         <repository>
           <id>gitea</id>
-          <url>http://172.20.0.27:3000/api/packages/sol_root/maven</url>
+          <url>https://sol.massimilianopili.com/git/api/packages/sol_root/maven</url>
           <releases><enabled>true</enabled></releases>
           <snapshots><enabled>true</enabled></snapshots>
         </repository>
