@@ -184,6 +184,11 @@
             <artifactId>mcp-graph-tools</artifactId>
             <version>0.1.4</version>
         </dependency>
+        <dependency>
+            <groupId>io.github.massimilianopili</groupId>
+            <artifactId>mcp-episode-tools</artifactId>
+            <version>0.1.0</version>
+        </dependency>
         <!-- DISABLED: no mcp.jira.api-token configured
         <dependency>
             <groupId>io.github.massimilianopili</groupId>
